@@ -1,9 +1,5 @@
 # Feynman Bot 🌌
 
-A Discord bot that posts surprising physics and math content daily, designed to break your intuition and make you see the world differently.
-
-Built with insights from a panel of science communicators: Feynman's playfulness, Gardner's puzzle-mindedness, Munroe's absurdist rigor, and more.
-
 ## Features
 
 ### Content Modes
