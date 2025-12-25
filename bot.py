@@ -478,6 +478,21 @@ async def before_daily_post():
 # MANUAL COMMANDS
 # ============================================================================
 
+@bot.command(name="debug_history")
+async def debug_history(ctx):
+    """Show raw history file contents."""
+    try:
+        with open(HISTORY_FILE, "r") as f:
+            content = f.read()
+        
+        if len(content) > 1900:
+            content = content[:1900] + "\n... (truncated)"
+        
+        await ctx.send(f"```json\n{content}\n```")
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
+
+
 @bot.command(name="fact")
 async def get_fact(ctx, *, topic: str = None):
     """Get a fact on demand. Optionally specify a topic."""
