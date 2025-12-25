@@ -1,4 +1,4 @@
-# Daily Wonder Bot 🌌
+# Feynman Bot 🌌
 
 A Discord bot that posts surprising physics and math content daily, designed to break your intuition and make you see the world differently.
 
