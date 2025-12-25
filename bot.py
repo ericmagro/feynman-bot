@@ -399,7 +399,7 @@ async def on_ready():
         daily_post.start()
 
 
-@tasks.loop(time=time(hour=9, minute=0))
+@tasks.loop(time=time(hour=18, minute=0))
 async def daily_post():
     """Post daily content to the designated channel."""
     channel = bot.get_channel(CHANNEL_ID)
