@@ -1,22 +1,20 @@
-# Feynman Bot 🥁
+# Feynman Bot
 
-A Discord bot that posts surprising physics and math content daily, designed to break your intuition and make you see the world differently.
+A Discord bot that posts surprising physics and math content weekly, designed to break your intuition and make you see the world differently.
 
 Built with insights from a panel of science communicators: Feynman's playfulness, Gardner's puzzle-mindedness, Munroe's absurdist rigor, and more.
 
 ## Features
 
-### Content Modes
-- **Facts** (Mon, Tue, Thu, Sat) — Surprising truths that break intuition, with vivid analogies and everyday connections
-- **What If?** (Wed) — Absurd hypotheticals answered with real physics, Randall Munroe style
-- **Puzzles** (Fri) — Intriguing paradoxes with answers revealed the next day  
-- **Connections** (Sun) — Weekly synthesis tying the week's content together
+### Weekly Digest (Fridays)
+Every Friday at 7pm UTC, the bot posts a digest with two items:
+- **Fact** — A surprising truth that breaks intuition, with vivid analogies and everyday connections
+- **What If?** — An absurd hypothetical answered with real physics, Randall Munroe style
 
 ### Smart History
 - Tracks all posts to avoid repetition
 - Cycles through "types of wonder" (things that seem impossible but are true, patterns that appear unexpectedly, etc.)
 - Spaced repetition callbacks to facts from 1-2 weeks ago (~30% of posts)
-- Puzzle answers automatically revealed the following day
 
 ### Commands
 | Command | Description |
@@ -69,21 +67,10 @@ Built with insights from a panel of science communicators: Feynman's playfulness
 ## Configuration
 
 ### Change posting time
-Edit the `time=time(hour=19, minute=0)` in `bot.py` (UTC timezone). Currently set to 1pm Central.
+Edit `time=time(hour=19, minute=0)` in `bot.py` (UTC timezone).
 
-### Change schedule
-Modify `MODE_SCHEDULE` dict:
-```python
-MODE_SCHEDULE = {
-    0: "fact",       # Monday
-    1: "fact",       # Tuesday
-    2: "what_if",    # Wednesday
-    3: "fact",       # Thursday
-    4: "puzzle",     # Friday
-    5: "fact",       # Saturday
-    6: "connections", # Sunday
-}
-```
+### Change posting day
+Edit `POSTING_DAY = 4` in `bot.py` (0=Monday, 4=Friday, 6=Sunday).
 
 ### Add topics or wonder types
 Append to `TOPICS` or `WONDER_TYPES` lists in `bot.py`.
@@ -107,8 +94,7 @@ The bot maintains `fact_history.json`:
     }
   ],
   "used_wonders": ["last", "five", "wonder", "types", "used"],
-  "used_topics": ["last", "eight", "topics"],
-  "pending_puzzle_answer": "Answer to reveal tomorrow, if any"
+  "used_topics": ["last", "eight", "topics"]
 }
 ```
 
@@ -139,8 +125,8 @@ This bot is designed around insights from science communicators:
 - **Ground in the everyday** (Vi Hart) — Connect abstract facts to coffee, traffic, phone screens
 - **Absurdist rigor** (Munroe) — Silly questions deserve serious physics
 - **Spaced repetition** (Oakley) — Callbacks to old facts help them stick
-- **See the connections** (Sagan) — Weekly synthesis shows where facts fit in the larger tapestry
+- **Less is more** (Oakley) — Weekly cadence prevents overwhelm, keeps each post feeling special
 
 ## Cost Estimate
 
-~$3-5/month. Uses Sonnet for content generation, Haiku for summaries.
+~$1/month. Weekly posting with Sonnet for content generation, Haiku for summaries.
