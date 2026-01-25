@@ -160,5 +160,53 @@ The goal isn't maximum content—it's maximum *impact per content*.
 
 ---
 
+## Production Hardening (v1.0.0)
+
+Before publishing, we ran an expert panel audit covering security, reliability, UX, and code quality.
+
+### Security Decisions
+
+| Issue | Decision | Rationale |
+|-------|----------|-----------|
+| Commands can be spammed | 30s cooldown per user | Prevents API cost abuse |
+| `!debug_history` exposes data | Removed entirely | No need in production |
+| User input in prompts | Truncate to 100 chars | Basic sanitization |
+
+### Reliability Decisions
+
+| Issue | Decision | Rationale |
+|-------|----------|-----------|
+| Sync API calls block event loop | `asyncio.to_thread()` wrapper | Non-blocking I/O |
+| File writes can corrupt on crash | Atomic writes (temp + rename) | Data integrity |
+| History grows forever | Auto-prune at 500 posts | Bounded storage |
+| Discord embed limit (1024 chars) | `truncate_for_embed()` | Graceful degradation |
+| Corrupted JSON file | Catch and start fresh | Self-healing |
+
+### Observability Decisions
+
+| Feature | Implementation | Why |
+|---------|----------------|-----|
+| Logging | `logging` module, not `print()` | Structured, timestamped |
+| Version | `VERSION = "1.0.0"` | Track deployments |
+| Health check | `!status` command | Monitor without logs |
+| Bot presence | "Watching for !help" | Shows bot is alive |
+
+### UX Decisions
+
+| Issue | Decision | Rationale |
+|-------|----------|-----------|
+| Default help is ugly | Custom `!help` | Cleaner, grouped |
+| Errors show tracebacks | Global error handler | Friendly messages |
+| Missing env vars crash | Validate at startup | Helpful error messages |
+
+### What We Kept Simple
+
+- **Single file:** No need for multi-file architecture at this scale
+- **No database:** JSON file is sufficient for ~500 posts
+- **No admin commands:** Single-user bot doesn't need role checks
+- **No web dashboard:** Overkill for personal use
+
+---
+
 *Document created: January 2025*
 *Last updated: January 2025*
