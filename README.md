@@ -1,132 +1,298 @@
 # Feynman Bot
 
-A Discord bot that posts surprising physics and math content weekly, designed to break your intuition and make you see the world differently.
+A Discord bot that delivers weekly doses of physics and math wonder, designed to break your intuition and make you see the world differently.
 
-Built with insights from a panel of science communicators: Feynman's playfulness, Gardner's puzzle-mindedness, Munroe's absurdist rigor, and more.
+Named after Richard Feynman, who believed that the beauty of nature lies in its surprising depth. Built with insights from a panel of science communicators: Feynman's playfulness, Gardner's puzzle-mindedness, Munroe's absurdist rigor, and more.
+
+## How It Works
+
+Every **Friday at 7pm UTC**, the bot posts a digest with two items:
+
+| Content Type | Description |
+|--------------|-------------|
+| **Fact** | A surprising truth that breaks intuition, with vivid analogies and everyday connections |
+| **What If?** | An absurd hypothetical answered with real physics, Randall Munroe style |
+
+### Example Output
+
+```
+┌─────────────────────────────────────────────────┐
+│  Friday Wonder                                  │
+├─────────────────────────────────────────────────┤
+│  Fact: Quantum Mechanics                        │
+│                                                 │
+│  Your body emits about 100 watts of infrared   │
+│  radiation right now—enough to power a bright  │
+│  light bulb. You're literally glowing, just in │
+│  wavelengths your eyes can't see. Thermal      │
+│  cameras don't "see heat"—they see YOU,        │
+│  shining like a dim star...                    │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│  What If...?                                    │
+│                                                 │
+│  What if you tried to cook a turkey by         │
+│  slapping it? You'd need to slap it at about   │
+│  1,665 mph—faster than a bullet—to deliver     │
+│  enough kinetic energy in one hit...           │
+└─────────────────────────────────────────────────┘
+```
 
 ## Features
 
-### Weekly Digest (Fridays)
-Every Friday at 7pm UTC, the bot posts a digest with two items:
-- **Fact** — A surprising truth that breaks intuition, with vivid analogies and everyday connections
-- **What If?** — An absurd hypothetical answered with real physics, Randall Munroe style
+### Smart Content Generation
 
-### Smart History
-- Tracks all posts to avoid repetition
-- Cycles through "types of wonder" (things that seem impossible but are true, patterns that appear unexpectedly, etc.)
-- Spaced repetition callbacks to facts from 1-2 weeks ago (~30% of posts)
+The bot uses Claude (Sonnet) to generate content with several intelligent features:
 
-### Commands
+- **Topic cycling** — Rotates through 20 physics/math topics (quantum mechanics, topology, chaos theory, etc.) avoiding recent repeats
+- **Wonder type rotation** — Cycles through 10 "types of wonder" (things proven but never observed, patterns across domains, etc.)
+- **Callback system** — ~30% chance to reference and connect to a fact from 1-2 weeks ago, reinforcing learning
+- **Deduplication** — Tracks all past posts to avoid repetition
+
+### On-Demand Commands
+
+Use these anytime to get content outside the weekly schedule:
+
 | Command | Description |
 |---------|-------------|
-| `!fact [topic]` | Get a fact (optionally about a specific topic) |
-| `!whatif` | Get an absurd hypothetical |
-| `!puzzle` | Get a puzzle |
-| `!answer` | Reveal answer to last `!puzzle` |
+| `!fact [topic]` | Get a surprising fact (optionally specify a topic like `!fact black holes`) |
+| `!whatif` | Get an absurd hypothetical with real physics |
+| `!puzzle` | Get a brain-teaser or paradox |
+| `!answer` | Reveal the answer to the last `!puzzle` |
 | `!history [n]` | Show last n posts (default 5) |
-| `!schedule` | Show the weekly posting schedule |
+| `!schedule` | Show the posting schedule |
+| `!debug_history` | Show raw history file (for debugging) |
+
+### Topics Covered
+
+The bot explores: quantum mechanics, number theory, thermodynamics, topology, relativity, probability paradoxes, chaos theory, electromagnetism, group theory, fluid dynamics, prime numbers, cosmology, game theory, optics, combinatorics, statistical mechanics, black holes, wave phenomena, graph theory, and orbital mechanics.
+
+### Types of Wonder
+
+Content rotates through different flavors of mathematical/physical beauty:
+
+- Something that seems impossible but is mathematically proven true
+- A simple question with a surprisingly complex or unsolved answer
+- A pattern that appears unexpectedly across unrelated domains
+- A problem that stumped scientists for decades (or centuries)
+- Something proven to exist but never directly observed
+- Two seemingly unrelated things that turn out to be equivalent
+- A result that contradicts everyday intuition
+- A physical phenomenon with no complete explanation yet
+- An everyday object hiding deep mathematical structure
+- A limit or bound that nature seems to respect mysteriously
 
 ## Setup
+
+### Prerequisites
+
+- Python 3.9+
+- A Discord account
+- An Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
 
 ### 1. Create a Discord Bot
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" → name it → Create
-3. Go to "Bot" tab → "Add Bot"
-4. Enable **Message Content Intent** under Privileged Gateway Intents
-5. Copy your bot token
-6. Go to "OAuth2" → "URL Generator"
+2. Click **New Application** → name it → Create
+3. Go to **Bot** tab → **Add Bot**
+4. Under **Privileged Gateway Intents**, enable:
+   - **Message Content Intent** (required for commands)
+5. Click **Reset Token** and copy your bot token (save it securely)
+6. Go to **OAuth2** → **URL Generator**:
    - Scopes: `bot`
-   - Permissions: `Send Messages`, `Embed Links`
-7. Open the generated URL to invite the bot
+   - Bot Permissions: `Send Messages`, `Embed Links`
+7. Copy the generated URL and open it to invite the bot to your server
 
 ### 2. Get Your Channel ID
 
-1. Enable Developer Mode in Discord (Settings → Advanced)
-2. Right-click your target channel → "Copy Channel ID"
+1. In Discord, go to **Settings** → **Advanced** → Enable **Developer Mode**
+2. Right-click your target channel → **Copy Channel ID**
 
 ### 3. Deploy to Railway
 
-1. Push this repo to GitHub
-2. Go to [Railway](https://railway.app) → New Project → Deploy from GitHub
-3. **Important:** Add a persistent volume for history:
-   - Click "+ Create" in top right → Volume
+1. Fork or push this repo to GitHub
+
+2. Go to [Railway](https://railway.app) → **New Project** → **Deploy from GitHub**
+
+3. **Add a persistent volume** (critical for history):
+   - Click **+ Create** in top right → **Volume**
    - Select your worker service
    - Mount path: `/data`
-4. Add environment variables:
 
-| Variable | Value |
-|----------|-------|
-| `DISCORD_TOKEN` | Your bot token |
-| `ANTHROPIC_API_KEY` | Your Claude API key |
-| `FACT_CHANNEL_ID` | Channel ID |
-| `HISTORY_FILE` | `/data/fact_history.json` |
+   > Without this, your posting history will reset on every deploy!
 
-5. Deploy! Check logs for "Logged in as..."
+4. Add environment variables in Railway:
 
-## Configuration
+   | Variable | Value | Description |
+   |----------|-------|-------------|
+   | `DISCORD_TOKEN` | `your_token_here` | Bot token from Discord Developer Portal |
+   | `ANTHROPIC_API_KEY` | `sk-ant-...` | API key from Anthropic Console |
+   | `FACT_CHANNEL_ID` | `123456789` | Channel ID where bot posts |
+   | `HISTORY_FILE` | `/data/fact_history.json` | Path for persistent history |
 
-### Change posting time
-Edit `time=time(hour=19, minute=0)` in `bot.py` (UTC timezone).
+5. Deploy and check logs for `Logged in as YourBotName#1234`
 
-### Change posting day
-Edit `POSTING_DAY = 4` in `bot.py` (0=Monday, 4=Friday, 6=Sunday).
+### Alternative: Run Locally
 
-### Add topics or wonder types
-Append to `TOPICS` or `WONDER_TYPES` lists in `bot.py`.
-
-### Reduce costs
-Change `claude-sonnet-4-20250514` to `claude-haiku-4-5-20251001` for main content (~10x cheaper, lower quality).
-
-## History File Structure
-
-The bot maintains `fact_history.json`:
-```json
-{
-  "posts": [
-    {
-      "date": "2025-01-15T09:00:00",
-      "mode": "fact",
-      "topic": "quantum mechanics",
-      "wonder_type": "something that seems impossible but is proven true",
-      "summary": "A one-sentence summary generated by Haiku",
-      "content": "Full post content..."
-    }
-  ],
-  "used_wonders": ["last", "five", "wonder", "types", "used"],
-  "used_topics": ["last", "eight", "topics"]
-}
-```
-
-Each post gets a proper summary via Haiku. The history is sent to Claude as context to prevent repetition and enable callbacks.
-
-## Local Development
 ```bash
-# Create .env (don't commit this)
-cat > .env << EOF
-DISCORD_TOKEN=your_token
-ANTHROPIC_API_KEY=your_key
+# Clone the repo
+git clone https://github.com/yourusername/feynman-bot.git
+cd feynman-bot
+
+# Create a virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file (don't commit this!)
+cat > .env << 'EOF'
+DISCORD_TOKEN=your_bot_token
+ANTHROPIC_API_KEY=your_anthropic_key
 FACT_CHANNEL_ID=your_channel_id
 HISTORY_FILE=./fact_history.json
 EOF
 
-# Load env and run
-export $(cat .env | xargs)
-pip install -r requirements.txt
+# Load environment and run
+export $(cat .env | xargs)  # On Windows, set each variable manually
 python bot.py
 ```
 
-## Design Philosophy
+## Configuration
 
-This bot is designed around insights from science communicators:
+### Change Posting Schedule
 
-- **Break intuition first** (Feynman) — Lead with the surprise, not the setup
-- **Types of wonder** (Gardner) — Rotate through different flavors of mathematical beauty
-- **Ground in the everyday** (Vi Hart) — Connect abstract facts to coffee, traffic, phone screens
-- **Absurdist rigor** (Munroe) — Silly questions deserve serious physics
-- **Spaced repetition** (Oakley) — Callbacks to old facts help them stick
-- **Less is more** (Oakley) — Weekly cadence prevents overwhelm, keeps each post feeling special
+Edit these values in `bot.py`:
+
+```python
+# Line ~54: Which day to post (0=Monday, 4=Friday, 6=Sunday)
+POSTING_DAY = 4  # Friday
+
+# Line ~344: What time to post (UTC)
+@tasks.loop(time=time(hour=19, minute=0))  # 7pm UTC = 2pm EST = 11am PST
+```
+
+### Customize Topics
+
+Add or modify the `TOPICS` list in `bot.py` (line ~44):
+
+```python
+TOPICS = [
+    "quantum mechanics", "number theory", "thermodynamics",
+    # Add your own topics here...
+]
+```
+
+### Customize Wonder Types
+
+Modify the `WONDER_TYPES` list in `bot.py` (line ~30) to change the flavors of content.
+
+### Reduce API Costs
+
+Replace `claude-sonnet-4-20250514` with `claude-haiku-4-5-20251001` in the code for ~10x cheaper generation (with lower quality).
+
+## Architecture
+
+```
+bot.py (single file, ~560 lines)
+├── Configuration (environment variables, topics, wonder types)
+├── History Management (load/save JSON, track used topics)
+├── Content Generation (fact, what-if, puzzle generators)
+├── Discord Bot (scheduled posting, command handlers)
+└── Entry Point
+```
+
+### Data Flow
+
+1. **Weekly trigger** → Check if Friday → Load history
+2. **Generate content** → Pick fresh topic/wonder type → Build context from history → Call Claude API
+3. **Post to Discord** → Format as embed → Send to channel
+4. **Save to history** → Update JSON file with new post + summary
+
+### History File Structure
+
+The bot maintains `fact_history.json`:
+
+```json
+{
+  "posts": [
+    {
+      "date": "2025-01-24T19:00:00",
+      "mode": "fact",
+      "topic": "quantum mechanics",
+      "wonder_type": "something that seems impossible but is proven true",
+      "summary": "Your body constantly emits infrared radiation...",
+      "content": "Full post content here...",
+      "had_callback": false
+    }
+  ],
+  "used_wonders": ["wonder1", "wonder2", "..."],
+  "used_topics": ["topic1", "topic2", "..."],
+  "temp_answer": "Answer to last !puzzle command"
+}
+```
+
+## Troubleshooting
+
+### Bot doesn't post on schedule
+
+- Check that `POSTING_DAY` matches your expected day (0=Monday, 6=Sunday)
+- Verify the time is in UTC (not your local timezone)
+- Check Railway logs for errors
+- Ensure the bot has permission to send messages in the channel
+
+### History resets after deploy
+
+- You need a **persistent volume** mounted at `/data`
+- Set `HISTORY_FILE=/data/fact_history.json` in environment variables
+- Verify with `!debug_history` command
+
+### "Could not find channel" error
+
+- Double-check your `FACT_CHANNEL_ID` is correct
+- Ensure the bot has been invited to the server containing that channel
+- Verify the bot has `Send Messages` and `Embed Links` permissions
+
+### API errors
+
+- Verify your `ANTHROPIC_API_KEY` is valid and has credits
+- Check [status.anthropic.com](https://status.anthropic.com) for outages
 
 ## Cost Estimate
 
-~$1/month. Weekly posting with Sonnet for content generation, Haiku for summaries.
+**~$1/month** with weekly posting:
+
+| Component | Model | Cost per Post | Weekly Cost |
+|-----------|-------|---------------|-------------|
+| Fact generation | Sonnet | ~$0.02 | $0.08/mo |
+| What-if generation | Sonnet | ~$0.02 | $0.08/mo |
+| Summaries (2x) | Haiku | ~$0.001 | $0.004/mo |
+
+On-demand commands (`!fact`, `!whatif`, `!puzzle`) add ~$0.02 each.
+
+## Design Philosophy
+
+This bot is built around principles from great science communicators:
+
+| Principle | Inspiration | Implementation |
+|-----------|-------------|----------------|
+| **Break intuition first** | Feynman | Lead with the surprise, not the setup |
+| **Types of wonder** | Gardner | Rotate through different flavors of mathematical beauty |
+| **Ground in the everyday** | Vi Hart | Connect abstract facts to coffee, traffic, phone screens |
+| **Absurdist rigor** | Munroe | Silly questions deserve serious physics |
+| **Spaced repetition** | Oakley | Callbacks to old facts help them stick |
+| **Less is more** | Oakley | Weekly cadence prevents overwhelm |
+
+## Dependencies
+
+- `discord.py>=2.3.0` — Discord API wrapper
+- `anthropic>=0.39.0` — Claude API client
+
+## License
+
+MIT
+
+---
+
+*"The first principle is that you must not fool yourself—and you are the easiest person to fool."* — Richard Feynman
