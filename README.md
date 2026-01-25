@@ -59,9 +59,12 @@ Use these anytime to get content outside the weekly schedule:
 | `!whatif` | Get an absurd hypothetical with real physics |
 | `!puzzle` | Get a brain-teaser or paradox |
 | `!answer` | Reveal the answer to the last `!puzzle` |
-| `!history [n]` | Show last n posts (default 5) |
+| `!history [n]` | Show last n posts (default 5, max 20) |
 | `!schedule` | Show the posting schedule |
-| `!debug_history` | Show raw history file (for debugging) |
+| `!status` | Show bot version and health |
+| `!help` | Show all commands |
+
+**Note:** Content commands (`!fact`, `!whatif`, `!puzzle`) have a 30-second cooldown per user to prevent API cost abuse.
 
 ### Topics Covered
 
@@ -195,11 +198,24 @@ Replace `claude-sonnet-4-20250514` with `claude-haiku-4-5-20251001` in the code 
 ## Architecture
 
 ```
-bot.py (single file, ~560 lines)
-├── Configuration (environment variables, topics, wonder types)
-├── History Management (load/save JSON, track used topics)
-├── Content Generation (fact, what-if, puzzle generators)
-├── Discord Bot (scheduled posting, command handlers)
+bot.py (single file, ~700 lines)
+├── Configuration
+│   ├── Environment validation (fails fast with helpful errors)
+│   ├── Logging setup (structured logs with timestamps)
+│   └── Topics and wonder types
+├── History Management
+│   ├── Atomic file writes (prevents corruption)
+│   ├── Auto-pruning (keeps last 500 posts)
+│   └── Corrupted file recovery
+├── Content Generation
+│   ├── Async Claude API calls (non-blocking)
+│   ├── Error handling with retries
+│   └── Embed truncation (respects Discord limits)
+├── Discord Bot
+│   ├── Custom help command
+│   ├── Command cooldowns (30s per user)
+│   ├── Global error handler
+│   └── Bot presence/status
 └── Entry Point
 ```
 
@@ -235,18 +251,24 @@ The bot maintains `fact_history.json`:
 
 ## Troubleshooting
 
+### Bot won't start
+
+- Check logs for `ERROR: Missing required environment variable`
+- Ensure all four env vars are set: `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`, `FACT_CHANNEL_ID`, `HISTORY_FILE`
+
 ### Bot doesn't post on schedule
 
 - Check that `POSTING_DAY` matches your expected day (0=Monday, 6=Sunday)
 - Verify the time is in UTC (not your local timezone)
 - Check Railway logs for errors
 - Ensure the bot has permission to send messages in the channel
+- Use `!status` to verify the bot is running
 
 ### History resets after deploy
 
 - You need a **persistent volume** mounted at `/data`
 - Set `HISTORY_FILE=/data/fact_history.json` in environment variables
-- Verify with `!debug_history` command
+- Use `!status` to check how many posts are in history
 
 ### "Could not find channel" error
 
@@ -254,10 +276,16 @@ The bot maintains `fact_history.json`:
 - Ensure the bot has been invited to the server containing that channel
 - Verify the bot has `Send Messages` and `Embed Links` permissions
 
-### API errors
+### API errors / "Please try again later"
 
 - Verify your `ANTHROPIC_API_KEY` is valid and has credits
 - Check [status.anthropic.com](https://status.anthropic.com) for outages
+- Check Railway logs for specific error messages
+
+### "Please wait Xs before using this command"
+
+- Commands have a 30-second cooldown per user to prevent API cost abuse
+- This is working as intended
 
 ## Cost Estimate
 

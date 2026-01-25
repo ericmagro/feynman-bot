@@ -3,28 +3,53 @@ import discord
 from discord.ext import commands, tasks
 import anthropic
 import os
+import sys
 import json
-from datetime import datetime, time, timedelta
+import logging
+from datetime import datetime, time, timezone
 from pathlib import Path
 import random
 
-# Configuration
-DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-CHANNEL_ID = int(os.environ["FACT_CHANNEL_ID"])
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+VERSION = "1.0.0"
+
+# Validate required environment variables
+def get_required_env(key: str) -> str:
+    """Get required environment variable or exit with helpful error."""
+    value = os.environ.get(key)
+    if not value:
+        print(f"ERROR: Missing required environment variable: {key}")
+        print(f"Please set {key} in your environment or .env file")
+        sys.exit(1)
+    return value
+
+DISCORD_TOKEN = get_required_env("DISCORD_TOKEN")
+ANTHROPIC_API_KEY = get_required_env("ANTHROPIC_API_KEY")
+CHANNEL_ID = int(get_required_env("FACT_CHANNEL_ID"))
 HISTORY_FILE = Path(os.environ.get("HISTORY_FILE", "fact_history.json"))
+
+# Logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger("feynman")
 
 # Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Claude client
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-# ============================================================================
+# =============================================================================
 # CONTENT CONFIGURATION
-# ============================================================================
+# =============================================================================
 
 # Types of wonder (per Martin Gardner)
 WONDER_TYPES = [
@@ -53,105 +78,145 @@ TOPICS = [
 # Weekly digest posts on Friday (weekday 4)
 POSTING_DAY = 4  # Friday
 
-# ============================================================================
-# HISTORY MANAGEMENT
-# ============================================================================
+# Maximum posts to keep in history (prevents unbounded growth)
+MAX_HISTORY_POSTS = 500
 
-def load_history():
+# =============================================================================
+# HISTORY MANAGEMENT
+# =============================================================================
+
+def load_history() -> dict:
     """Load posting history from JSON file."""
     if HISTORY_FILE.exists():
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            logger.error(f"Corrupted history file, starting fresh")
+            return _empty_history()
+    return _empty_history()
+
+
+def _empty_history() -> dict:
+    """Return empty history structure."""
     return {
-        "posts": [],           # All posts with full details
-        "used_wonders": [],    # Recently used wonder types (reset periodically)
-        "used_topics": [],     # Recently used topics (reset periodically)
+        "posts": [],
+        "used_wonders": [],
+        "used_topics": [],
     }
 
 
-def save_history(history):
-    """Save posting history to JSON file."""
-    with open(HISTORY_FILE, "w") as f:
+def save_history(history: dict) -> None:
+    """Save posting history to JSON file atomically."""
+    # Write to temp file first, then rename (atomic on POSIX)
+    temp_file = HISTORY_FILE.with_suffix(".tmp")
+    with open(temp_file, "w") as f:
         json.dump(history, f, indent=2, default=str)
+    temp_file.rename(HISTORY_FILE)
 
 
-def add_to_history(history, post_data):
+def add_to_history(history: dict, post_data: dict) -> None:
     """Add a new post to history."""
     history["posts"].append(post_data)
+
+    # Prune old posts if over limit
+    if len(history["posts"]) > MAX_HISTORY_POSTS:
+        history["posts"] = history["posts"][-MAX_HISTORY_POSTS:]
 
     # Track what we've used recently
     if post_data.get("wonder_type"):
         history["used_wonders"].append(post_data["wonder_type"])
-        # Keep only last 5 to allow cycling
         history["used_wonders"] = history["used_wonders"][-5:]
 
     if post_data.get("topic"):
         history["used_topics"].append(post_data["topic"])
-        # Keep only last 8 to allow cycling
         history["used_topics"] = history["used_topics"][-8:]
 
     save_history(history)
 
 
-def get_callback_candidate(history):
+def get_callback_candidate(history: dict) -> dict | None:
     """Find a good post from 1-2 weeks ago to callback to."""
     if len(history["posts"]) < 7:
         return None
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     candidates = []
 
     for post in history["posts"]:
-        post_date = datetime.fromisoformat(post["date"])
-        days_ago = (now - post_date).days
+        try:
+            post_date = datetime.fromisoformat(post["date"]).replace(tzinfo=timezone.utc)
+            days_ago = (now - post_date).days
 
-        # Look for posts 7-21 days old that were facts (not puzzles/what-ifs)
-        if 7 <= days_ago <= 21 and post.get("mode") == "fact":
-            candidates.append(post)
+            if 7 <= days_ago <= 21 and post.get("mode") == "fact":
+                candidates.append(post)
+        except (KeyError, ValueError):
+            continue
 
     return random.choice(candidates) if candidates else None
 
 
-def get_recent_posts(history, days=7):
+def get_recent_posts(history: dict, days: int = 7) -> list:
     """Get posts from the last N days."""
     if not history["posts"]:
         return []
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     recent = []
 
     for post in history["posts"]:
-        post_date = datetime.fromisoformat(post["date"])
-        if (now - post_date).days <= days:
-            recent.append(post)
+        try:
+            post_date = datetime.fromisoformat(post["date"]).replace(tzinfo=timezone.utc)
+            if (now - post_date).days <= days:
+                recent.append(post)
+        except (KeyError, ValueError):
+            continue
 
     return recent
 
 
-def pick_fresh(options, recently_used):
+def pick_fresh(options: list, recently_used: list) -> str:
     """Pick an option we haven't used recently, or random if all used."""
     fresh = [o for o in options if o not in recently_used]
     return random.choice(fresh) if fresh else random.choice(options)
 
 
-# ============================================================================
+# =============================================================================
 # CONTENT GENERATION
-# ============================================================================
+# =============================================================================
 
-async def generate_summary(content):
+async def call_claude(model: str, max_tokens: int, prompt: str) -> str:
+    """Call Claude API with error handling."""
+    try:
+        # Run sync API call in thread pool to not block event loop
+        def _call():
+            return claude.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+        message = await asyncio.to_thread(_call)
+        return message.content[0].text
+    except anthropic.APIConnectionError:
+        logger.error("Failed to connect to Anthropic API")
+        raise
+    except anthropic.RateLimitError:
+        logger.error("Anthropic API rate limit exceeded")
+        raise
+    except anthropic.APIStatusError as e:
+        logger.error(f"Anthropic API error: {e.status_code} - {e.message}")
+        raise
+
+
+async def generate_summary(content: str) -> str:
     """Generate a concise summary of a post using Haiku."""
-    message = claude.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=100,
-        messages=[{
-            "role": "user",
-            "content": f"Summarize this in 1 sentence (under 100 words), focusing on the core concept or question:\n\n{content}"
-        }]
-    )
-    return message.content[0].text.strip()
+    prompt = f"Summarize this in 1 sentence (under 100 words), focusing on the core concept or question:\n\n{content}"
+    response = await call_claude("claude-haiku-4-5-20251001", 100, prompt)
+    return response.strip()
 
 
-def build_context_block(history):
+def build_context_block(history: dict) -> str:
     """Build context from history to send to Claude."""
     recent = get_recent_posts(history, days=14)
 
@@ -159,8 +224,8 @@ def build_context_block(history):
         return ""
 
     lines = ["<recent_posts>"]
-    for post in recent[-10:]:  # Last 10 posts max
-        date = post["date"][:10]
+    for post in recent[-10:]:
+        date = post.get("date", "")[:10]
         mode = post.get("mode", "fact")
         topic = post.get("topic", "unknown")
         summary = post.get("summary", "")[:200]
@@ -170,7 +235,7 @@ def build_context_block(history):
     return "\n".join(lines)
 
 
-async def generate_fact(history):
+async def generate_fact(history: dict) -> dict:
     """Generate a surprising fact."""
     topic = pick_fresh(TOPICS, history.get("used_topics", []))
     wonder = pick_fresh(WONDER_TYPES, history.get("used_wonders", []))
@@ -182,11 +247,16 @@ async def generate_fact(history):
     if random.random() < 0.3:
         callback = get_callback_candidate(history)
         if callback:
-            callback_text = f"""
-CALLBACK OPPORTUNITY: About {(datetime.utcnow() - datetime.fromisoformat(callback['date'])).days} days ago,
+            try:
+                post_date = datetime.fromisoformat(callback["date"]).replace(tzinfo=timezone.utc)
+                days_ago = (datetime.now(timezone.utc) - post_date).days
+                callback_text = f"""
+CALLBACK OPPORTUNITY: About {days_ago} days ago,
 you shared this: "{callback.get('summary', '')}"
 Consider briefly connecting today's fact to this earlier one if there's a natural link.
 If no natural link, ignore this and just share a fresh fact."""
+            except (KeyError, ValueError):
+                callback = None
 
     prompt = f"""{context}
 
@@ -205,13 +275,7 @@ Requirements:
 - No preamble—start directly with the surprising content
 - Close with one relevant emoji"""
 
-    message = claude.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    content = message.content[0].text
+    content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
     summary = await generate_summary(content)
 
     return {
@@ -224,7 +288,7 @@ Requirements:
     }
 
 
-async def generate_what_if(history):
+async def generate_what_if(history: dict) -> dict:
     """Generate an absurd hypothetical answered with real physics/math."""
     topic = pick_fresh(TOPICS, history.get("used_topics", []))
     context = build_context_block(history)
@@ -254,13 +318,7 @@ Requirements:
 - No preamble—start with the hypothetical question directly
 - Close with one relevant emoji"""
 
-    message = claude.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    content = message.content[0].text
+    content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
     summary = await generate_summary(content)
 
     return {
@@ -271,8 +329,8 @@ Requirements:
     }
 
 
-async def generate_puzzle(history):
-    """Generate an intriguing puzzle to be answered tomorrow."""
+async def generate_puzzle(history: dict) -> dict:
+    """Generate an intriguing puzzle."""
     topic = pick_fresh(TOPICS, history.get("used_topics", []))
     context = build_context_block(history)
 
@@ -293,13 +351,7 @@ Requirements:
 
 After the puzzle, provide the answer in a SEPARATE section marked ANSWER: that will be posted tomorrow."""
 
-    message = claude.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    full_response = message.content[0].text
+    full_response = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
 
     # Parse out puzzle and answer
     if "ANSWER:" in full_response:
@@ -308,7 +360,7 @@ After the puzzle, provide the answer in a SEPARATE section marked ANSWER: that w
         answer = parts[1].strip()
     else:
         puzzle = full_response
-        answer = "(Answer coming tomorrow)"
+        answer = "(Answer not available)"
 
     summary = await generate_summary(puzzle)
 
@@ -321,7 +373,7 @@ After the puzzle, provide the answer in a SEPARATE section marked ANSWER: that w
     }
 
 
-async def generate_weekly_digest(history):
+async def generate_weekly_digest(history: dict) -> tuple[dict, dict]:
     """Generate a fact and what-if for the weekly digest."""
     fact_result, whatif_result = await asyncio.gather(
         generate_fact(history),
@@ -330,30 +382,64 @@ async def generate_weekly_digest(history):
     return fact_result, whatif_result
 
 
-# ============================================================================
+def truncate_for_embed(text: str, max_length: int = 1024) -> str:
+    """Truncate text to fit Discord embed field limits."""
+    if len(text) <= max_length:
+        return text
+    return text[:max_length - 3] + "..."
+
+
+# =============================================================================
 # DISCORD BOT
-# ============================================================================
+# =============================================================================
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    """Called when bot is connected and ready."""
+    logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    logger.info(f"Version {VERSION}")
+
+    # Set bot presence
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="for !help"
+        )
+    )
+
     if not weekly_post.is_running():
         weekly_post.start()
+        logger.info("Weekly post task started")
 
 
-@tasks.loop(time=time(hour=19, minute=0))
+@bot.event
+async def on_command_error(ctx, error):
+    """Global error handler for commands."""
+    if isinstance(error, commands.CommandNotFound):
+        return  # Ignore unknown commands
+    elif isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"Please wait {error.retry_after:.0f}s before using this command again.")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send("You don't have permission to use this command.")
+    else:
+        logger.error(f"Command error: {error}")
+        await ctx.send("Something went wrong. Please try again later.")
+
+
+@tasks.loop(time=time(hour=19, minute=0, tzinfo=timezone.utc))
 async def weekly_post():
     """Post weekly digest to the designated channel (Fridays only)."""
     # Only post on Friday
-    if datetime.utcnow().weekday() != POSTING_DAY:
+    if datetime.now(timezone.utc).weekday() != POSTING_DAY:
         return
 
     channel = bot.get_channel(CHANNEL_ID)
     if channel is None:
-        print(f"Could not find channel {CHANNEL_ID}")
+        logger.error(f"Could not find channel {CHANNEL_ID}")
         return
 
     try:
+        logger.info("Generating weekly digest...")
         history = load_history()
 
         # Generate both items
@@ -363,69 +449,89 @@ async def weekly_post():
         embed = discord.Embed(
             title="Friday Wonder",
             color=0x5865F2,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         embed.add_field(
             name=f"Fact: {fact.get('topic', 'Physics & Math').title()}",
-            value=fact["content"],
+            value=truncate_for_embed(fact["content"]),
             inline=False
         )
         embed.add_field(
             name="What If...?",
-            value=whatif["content"],
+            value=truncate_for_embed(whatif["content"]),
             inline=False
         )
         embed.set_footer(text="Powered by Claude")
 
         await channel.send(embed=embed)
-        print(f"Posted weekly digest: fact about {fact.get('topic')}, what-if about {whatif.get('topic')}")
+        logger.info(f"Posted weekly digest: fact about {fact.get('topic')}, what-if about {whatif.get('topic')}")
 
         # Save both to history
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         fact["date"] = now
         whatif["date"] = now
         add_to_history(history, fact)
         add_to_history(history, whatif)
 
+    except anthropic.APIError as e:
+        logger.error(f"API error during weekly post: {e}")
     except Exception as e:
-        print(f"Error posting: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error posting weekly digest: {e}", exc_info=True)
 
 
 @weekly_post.before_loop
 async def before_weekly_post():
+    """Wait for bot to be ready before starting task."""
     await bot.wait_until_ready()
 
 
-# ============================================================================
-# MANUAL COMMANDS
-# ============================================================================
+# =============================================================================
+# COMMANDS
+# =============================================================================
 
-@bot.command(name="debug_history")
-async def debug_history(ctx):
-    """Show raw history file contents."""
-    try:
-        with open(HISTORY_FILE, "r") as f:
-            content = f.read()
-
-        if len(content) > 1900:
-            content = content[:1900] + "\n... (truncated)"
-
-        await ctx.send(f"```json\n{content}\n```")
-    except Exception as e:
-        await ctx.send(f"Error: {e}")
+@bot.command(name="help")
+async def help_command(ctx):
+    """Show available commands."""
+    embed = discord.Embed(
+        title="Feynman Bot Commands",
+        description="Weekly physics & math wonder, plus on-demand content",
+        color=0x5865F2
+    )
+    embed.add_field(
+        name="Content Commands",
+        value=(
+            "`!fact [topic]` — Get a surprising fact\n"
+            "`!whatif` — Absurd hypothetical with real physics\n"
+            "`!puzzle` — Get a brain-teaser\n"
+            "`!answer` — Reveal last puzzle's answer"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="Info Commands",
+        value=(
+            "`!schedule` — Show posting schedule\n"
+            "`!history [n]` — Show last n posts\n"
+            "`!help` — This message"
+        ),
+        inline=False
+    )
+    embed.set_footer(text=f"v{VERSION} • Posts every Friday at 7pm UTC")
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="fact")
+@commands.cooldown(1, 30, commands.BucketType.user)
 async def get_fact(ctx, *, topic: str = None):
     """Get a fact on demand. Optionally specify a topic."""
     async with ctx.typing():
-        history = load_history()
+        try:
+            history = load_history()
 
-        if topic:
-            # Custom topic - simplified prompt
-            prompt = f"""Share a genuinely surprising fact about {topic}.
+            if topic:
+                # Sanitize topic (basic length limit)
+                topic = topic[:100]
+                prompt = f"""Share a genuinely surprising fact about {topic}.
 
 Requirements:
 - Lead with the surprise—the thing that breaks intuition
@@ -436,78 +542,86 @@ Requirements:
 - No preamble
 - Close with one emoji"""
 
-            message = claude.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}]
+                content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
+                used_topic = topic
+            else:
+                result = await generate_fact(history)
+                content = result["content"]
+                used_topic = result.get("topic", "Physics & Math")
+
+            embed = discord.Embed(
+                title=f"Fact: {used_topic.title()}",
+                description=truncate_for_embed(content),
+                color=0x5865F2,
+                timestamp=datetime.now(timezone.utc)
             )
-            content = message.content[0].text
-            used_topic = topic
-        else:
-            result = await generate_fact(history)
-            content = result["content"]
-            used_topic = result.get("topic", "Physics & Math")
+            embed.set_footer(text=f"Requested by {ctx.author.display_name}")
 
-        embed = discord.Embed(
-            title=f"Fact: {used_topic.title()}",
-            description=content,
-            color=0x5865F2,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+            await ctx.send(embed=embed)
 
-        await ctx.send(embed=embed)
+        except anthropic.APIError:
+            await ctx.send("Sorry, I couldn't generate a fact right now. Please try again later.")
 
 
 @bot.command(name="whatif")
+@commands.cooldown(1, 30, commands.BucketType.user)
 async def get_what_if(ctx):
     """Get an absurd hypothetical answered with real physics."""
     async with ctx.typing():
-        history = load_history()
-        result = await generate_what_if(history)
+        try:
+            history = load_history()
+            result = await generate_what_if(history)
 
-        embed = discord.Embed(
-            title="What If...?",
-            description=result["content"],
-            color=0xEB459E,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+            embed = discord.Embed(
+                title="What If...?",
+                description=truncate_for_embed(result["content"]),
+                color=0xEB459E,
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.set_footer(text=f"Requested by {ctx.author.display_name}")
 
-        await ctx.send(embed=embed)
+            await ctx.send(embed=embed)
+
+        except anthropic.APIError:
+            await ctx.send("Sorry, I couldn't generate a what-if right now. Please try again later.")
 
 
 @bot.command(name="puzzle")
+@commands.cooldown(1, 30, commands.BucketType.user)
 async def get_puzzle(ctx):
-    """Get a puzzle (answer won't be stored for daily reveal)."""
+    """Get a puzzle."""
     async with ctx.typing():
-        history = load_history()
-        result = await generate_puzzle(history)
+        try:
+            history = load_history()
+            result = await generate_puzzle(history)
 
-        embed = discord.Embed(
-            title=f"Puzzle: {result.get('topic', 'Math & Physics').title()}",
-            description=result["content"],
-            color=0xFEE75C,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text=f"Requested by {ctx.author.display_name} | Answer: use !answer")
+            embed = discord.Embed(
+                title=f"Puzzle: {result.get('topic', 'Math & Physics').title()}",
+                description=truncate_for_embed(result["content"]),
+                color=0xFEE75C,
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.set_footer(text=f"Requested by {ctx.author.display_name} • Use !answer for solution")
 
-        # Store answer temporarily for !answer command
-        history["temp_answer"] = result.get("answer", "No answer available")
-        save_history(history)
+            # Store answer temporarily
+            history["temp_answer"] = result.get("answer", "No answer available")
+            save_history(history)
 
-        await ctx.send(embed=embed)
+            await ctx.send(embed=embed)
+
+        except anthropic.APIError:
+            await ctx.send("Sorry, I couldn't generate a puzzle right now. Please try again later.")
 
 
 @bot.command(name="answer")
 async def get_answer(ctx):
     """Get the answer to the last !puzzle."""
     history = load_history()
-    answer = history.get("temp_answer", "No recent puzzle to answer!")
+    answer = history.get("temp_answer", "No recent puzzle to answer! Use `!puzzle` first.")
 
     embed = discord.Embed(
         title="Puzzle Answer",
-        description=answer,
+        description=truncate_for_embed(answer),
         color=0x57F287
     )
     await ctx.send(embed=embed)
@@ -516,6 +630,9 @@ async def get_answer(ctx):
 @bot.command(name="history")
 async def show_history(ctx, count: int = 5):
     """Show recent posts. Usage: !history [count]"""
+    # Limit count to reasonable range
+    count = max(1, min(count, 20))
+
     history = load_history()
     recent = history.get("posts", [])[-count:]
 
@@ -548,11 +665,32 @@ async def show_schedule(ctx):
     )
     embed.add_field(
         name="On-Demand Commands",
-        value="`!fact [topic]` - Get a fact\n`!whatif` - Absurd hypothetical\n`!puzzle` / `!answer` - Puzzle mode\n`!history [n]` - Recent posts",
+        value="`!fact [topic]` — Get a fact\n`!whatif` — Absurd hypothetical\n`!puzzle` / `!answer` — Puzzle mode\n`!history [n]` — Recent posts",
         inline=False
     )
     await ctx.send(embed=embed)
 
 
+@bot.command(name="status")
+async def show_status(ctx):
+    """Show bot status (for monitoring)."""
+    history = load_history()
+    post_count = len(history.get("posts", []))
+
+    embed = discord.Embed(
+        title="Bot Status",
+        color=0x57F287
+    )
+    embed.add_field(name="Version", value=VERSION, inline=True)
+    embed.add_field(name="Posts in History", value=str(post_count), inline=True)
+    embed.add_field(name="Next Post", value="Friday 7pm UTC", inline=True)
+    await ctx.send(embed=embed)
+
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
+
 if __name__ == "__main__":
+    logger.info(f"Starting Feynman Bot v{VERSION}")
     bot.run(DISCORD_TOKEN)
