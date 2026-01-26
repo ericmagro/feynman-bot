@@ -169,16 +169,16 @@ python bot.py
 Edit these values in `bot.py`:
 
 ```python
-# Line ~54: Which day to post (0=Monday, 4=Friday, 6=Sunday)
+# Line ~79: Which day to post (0=Monday, 4=Friday, 6=Sunday)
 POSTING_DAY = 4  # Friday
 
-# Line ~344: What time to post (UTC)
+# Line ~433: What time to post (UTC)
 @tasks.loop(time=time(hour=19, minute=0))  # 7pm UTC = 2pm EST = 11am PST
 ```
 
 ### Customize Topics
 
-Add or modify the `TOPICS` list in `bot.py` (line ~44):
+Add or modify the `TOPICS` list in `bot.py` (line ~69):
 
 ```python
 TOPICS = [
@@ -189,7 +189,7 @@ TOPICS = [
 
 ### Customize Wonder Types
 
-Modify the `WONDER_TYPES` list in `bot.py` (line ~30) to change the flavors of content.
+Modify the `WONDER_TYPES` list in `bot.py` (line ~55) to change the flavors of content.
 
 ### Reduce API Costs
 
@@ -316,6 +316,14 @@ This bot is built around principles from great science communicators:
 
 - `discord.py>=2.3.0` — Discord API wrapper
 - `anthropic>=0.39.0` — Claude API client
+
+## For Contributors
+
+| Document | Purpose |
+|----------|---------|
+| `CLAUDE.md` | AI assistant guidance: code structure, dev workflow, prompt documentation |
+| `DESIGN.md` | Architectural decisions: why weekly cadence, why fact+what-if, production hardening |
+| `CHANGELOG.md` | Version history following Keep a Changelog format |
 
 ## License
 

@@ -186,9 +186,13 @@ def pick_fresh(options: list, recently_used: list) -> str:
 # =============================================================================
 
 async def call_claude(model: str, max_tokens: int, prompt: str) -> str:
-    """Call Claude API with error handling."""
+    """Call Claude API with error handling.
+
+    Uses asyncio.to_thread() because the Anthropic SDK is synchronous.
+    Without this, API calls would block the Discord event loop, freezing
+    the bot during content generation (can't respond to commands, etc.).
+    """
     try:
-        # Run sync API call in thread pool to not block event loop
         def _call():
             return claude.messages.create(
                 model=model,
