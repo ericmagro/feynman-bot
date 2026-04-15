@@ -94,6 +94,12 @@ CALLBACK_PROBABILITY = 0.3  # ~30% chance to reference old post
 # HISTORY MANAGEMENT
 # =============================================================================
 
+# Serializes read-modify-write sequences against the history file.
+# Multiple writers (weekly task, !puzzle's temp_answer) can otherwise clobber
+# each other since each loads, mutates, and saves a separate dict copy.
+HISTORY_LOCK = asyncio.Lock()
+
+
 def load_history() -> dict:
     """Load posting history from JSON file."""
     if HISTORY_FILE.exists():
@@ -479,12 +485,15 @@ async def weekly_post():
         await channel.send(embed=embed)
         logger.info(f"Posted weekly digest: fact about {fact.get('topic')}, what-if about {whatif.get('topic')}")
 
-        # Save both to history
+        # Save both to history (re-load under lock to avoid clobbering
+        # concurrent writers like !puzzle's temp_answer).
         now = datetime.now(timezone.utc).isoformat()
         fact["date"] = now
         whatif["date"] = now
-        add_to_history(history, fact)
-        add_to_history(history, whatif)
+        async with HISTORY_LOCK:
+            history = load_history()
+            add_to_history(history, fact)
+            add_to_history(history, whatif)
 
     except anthropic.APIError as e:
         logger.error(f"API error during weekly post: {e}")
@@ -616,9 +625,12 @@ async def get_puzzle(ctx):
             )
             embed.set_footer(text=f"Requested by {ctx.author.display_name} • Use !answer for solution")
 
-            # Store answer temporarily
-            history["temp_answer"] = result.get("answer", "No answer available")
-            save_history(history)
+            # Store answer temporarily (re-load under lock so we don't
+            # clobber a concurrent weekly-post write).
+            async with HISTORY_LOCK:
+                history = load_history()
+                history["temp_answer"] = result.get("answer", "No answer available")
+                save_history(history)
 
             await ctx.send(embed=embed)
 

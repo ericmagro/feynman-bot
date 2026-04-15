@@ -9,6 +9,7 @@ Prioritized improvements identified during January 2025 audit.
 - [x] **Configurable models** — `GENERATION_MODEL` and `SUMMARY_MODEL` env vars
 - [x] **Named constants** — Replaced magic numbers with `RECENT_WONDERS_MEMORY`, etc.
 - [x] **Testing guide** — When/what/how to test in `CLAUDE.md`
+- [x] **History file locking** — `HISTORY_LOCK` serializes RMW in weekly task and `!puzzle`
 
 ## Medium Priority (Next Up)
 
@@ -22,21 +23,6 @@ Transient errors (rate limits, connection timeouts) currently cause complete fai
 @retry(max_attempts=3, backoff_factor=2)
 async def call_claude(...):
     ...
-```
-
-### Add history file locking
-**Location:** `bot.py` `add_to_history()` function (~line 125)
-
-Parallel generation (`asyncio.gather` in `generate_weekly_digest`) could cause race conditions when both tasks update history simultaneously. Last-write-wins currently, which may lose tracking data.
-
-```python
-# Pseudocode
-history_lock = asyncio.Lock()
-
-async def safe_add_to_history(history, post_data):
-    async with history_lock:
-        history = load_history()  # Re-read latest
-        add_to_history(history, post_data)
 ```
 
 ### Create operations runbook
