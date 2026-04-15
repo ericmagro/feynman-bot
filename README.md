@@ -132,8 +132,12 @@ Content rotates through different flavors of mathematical/physical beauty:
    | `ANTHROPIC_API_KEY` | `sk-ant-...` | API key from Anthropic Console |
    | `FACT_CHANNEL_ID` | `123456789` | Channel ID where bot posts |
    | `HISTORY_FILE` | `/data/fact_history.json` | Path for persistent history |
-   | `GENERATION_MODEL` | (optional) | Override content model (default: `claude-sonnet-4-6`) |
-   | `SUMMARY_MODEL` | (optional) | Override summary model (default: `claude-haiku-4-5-20251001`) |
+   | `GENERATION_MODEL` | (optional) | Override content model (default from `models.json`) |
+   | `SUMMARY_MODEL` | (optional) | Override summary model (default from `models.json`) |
+
+   Model defaults live in `models.json` at the repo root. To upgrade after a
+   deprecation notice from Anthropic, edit that file and push — no code changes,
+   no Railway env-var changes.
 
 5. Deploy and check logs for `Logged in as YourBotName#1234`
 

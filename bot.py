@@ -81,9 +81,15 @@ POSTING_DAY = 4  # Friday
 # Maximum posts to keep in history (prevents unbounded growth)
 MAX_HISTORY_POSTS = 500
 
-# Model configuration (override via environment variables)
-GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-sonnet-4-6")
-SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", "claude-haiku-4-5-20251001")
+# Model configuration: source of truth is models.json (committed to repo).
+# Env vars still win if set, useful for local experimentation without
+# editing the committed file. To upgrade models in prod, edit models.json
+# and push — Railway auto-deploys.
+_MODELS_FILE = Path(__file__).parent / "models.json"
+with open(_MODELS_FILE) as _f:
+    _models = json.load(_f)
+GENERATION_MODEL = os.environ.get("GENERATION_MODEL", _models["generation_model"])
+SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", _models["summary_model"])
 
 # Content variety settings
 RECENT_WONDERS_MEMORY = 5   # Avoid repeating wonder types within ~2 weeks
