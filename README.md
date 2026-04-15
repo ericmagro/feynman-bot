@@ -132,6 +132,8 @@ Content rotates through different flavors of mathematical/physical beauty:
    | `ANTHROPIC_API_KEY` | `sk-ant-...` | API key from Anthropic Console |
    | `FACT_CHANNEL_ID` | `123456789` | Channel ID where bot posts |
    | `HISTORY_FILE` | `/data/fact_history.json` | Path for persistent history |
+   | `GENERATION_MODEL` | (optional) | Override content model (default: `claude-sonnet-4-6`) |
+   | `SUMMARY_MODEL` | (optional) | Override summary model (default: `claude-haiku-4-5-20251001`) |
 
 5. Deploy and check logs for `Logged in as YourBotName#1234`
 
@@ -193,7 +195,7 @@ Modify the `WONDER_TYPES` list in `bot.py` (line ~55) to change the flavors of c
 
 ### Reduce API Costs
 
-Replace `claude-sonnet-4-20250514` with `claude-haiku-4-5-20251001` in the code for ~10x cheaper generation (with lower quality).
+Set `GENERATION_MODEL=claude-haiku-4-5-20251001` in your environment for ~10x cheaper generation (with lower quality). No code changes needed.
 
 ## Architecture
 
@@ -312,10 +314,22 @@ This bot is built around principles from great science communicators:
 | **Spaced repetition** | Oakley | Callbacks to old facts help them stick |
 | **Less is more** | Oakley | Weekly cadence prevents overwhelm |
 
+## Testing
+
+Run the unit tests with:
+
+```bash
+pytest test_bot.py -v
+```
+
+Tests cover history management, deduplication logic, and utility functions. No Discord or Anthropic API credentials required for testing.
+
 ## Dependencies
 
-- `discord.py>=2.3.0` — Discord API wrapper
-- `anthropic>=0.39.0` — Claude API client
+- `discord.py>=2.3.0,<3.0.0` — Discord API wrapper
+- `anthropic>=0.39.0,<1.0.0` — Claude API client
+- `pytest>=8.0.0,<9.0.0` — Testing (dev only)
+- `pytest-asyncio>=0.23.0,<1.0.0` — Async test support (dev only)
 
 ## For Contributors
 
@@ -324,6 +338,7 @@ This bot is built around principles from great science communicators:
 | `CLAUDE.md` | AI assistant guidance: code structure, dev workflow, prompt documentation |
 | `DESIGN.md` | Architectural decisions: why weekly cadence, why fact+what-if, production hardening |
 | `CHANGELOG.md` | Version history following Keep a Changelog format |
+| `TODO.md` | Prioritized improvements and remaining work |
 
 ## License
 

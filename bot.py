@@ -14,7 +14,7 @@ import random
 # CONFIGURATION
 # =============================================================================
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Validate required environment variables
 def get_required_env(key: str) -> str:
@@ -81,6 +81,15 @@ POSTING_DAY = 4  # Friday
 # Maximum posts to keep in history (prevents unbounded growth)
 MAX_HISTORY_POSTS = 500
 
+# Model configuration (override via environment variables)
+GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-sonnet-4-6")
+SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", "claude-haiku-4-5-20251001")
+
+# Content variety settings
+RECENT_WONDERS_MEMORY = 5   # Avoid repeating wonder types within ~2 weeks
+RECENT_TOPICS_MEMORY = 8    # Avoid repeating topics within ~4 weeks
+CALLBACK_PROBABILITY = 0.3  # ~30% chance to reference old post
+
 # =============================================================================
 # HISTORY MANAGEMENT
 # =============================================================================
@@ -126,11 +135,11 @@ def add_to_history(history: dict, post_data: dict) -> None:
     # Track what we've used recently
     if post_data.get("wonder_type"):
         history["used_wonders"].append(post_data["wonder_type"])
-        history["used_wonders"] = history["used_wonders"][-5:]
+        history["used_wonders"] = history["used_wonders"][-RECENT_WONDERS_MEMORY:]
 
     if post_data.get("topic"):
         history["used_topics"].append(post_data["topic"])
-        history["used_topics"] = history["used_topics"][-8:]
+        history["used_topics"] = history["used_topics"][-RECENT_TOPICS_MEMORY:]
 
     save_history(history)
 
@@ -216,7 +225,7 @@ async def call_claude(model: str, max_tokens: int, prompt: str) -> str:
 async def generate_summary(content: str) -> str:
     """Generate a concise summary of a post using Haiku."""
     prompt = f"Summarize this in 1 sentence (under 100 words), focusing on the core concept or question:\n\n{content}"
-    response = await call_claude("claude-haiku-4-5-20251001", 100, prompt)
+    response = await call_claude(SUMMARY_MODEL, 100, prompt)
     return response.strip()
 
 
@@ -248,7 +257,7 @@ async def generate_fact(history: dict) -> dict:
     # Check for callback opportunity (~30% chance if available)
     callback = None
     callback_text = ""
-    if random.random() < 0.3:
+    if random.random() < CALLBACK_PROBABILITY:
         callback = get_callback_candidate(history)
         if callback:
             try:
@@ -279,7 +288,7 @@ Requirements:
 - No preamble—start directly with the surprising content
 - Close with one relevant emoji"""
 
-    content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
+    content = await call_claude(GENERATION_MODEL, 1024, prompt)
     summary = await generate_summary(content)
 
     return {
@@ -322,7 +331,7 @@ Requirements:
 - No preamble—start with the hypothetical question directly
 - Close with one relevant emoji"""
 
-    content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
+    content = await call_claude(GENERATION_MODEL, 1024, prompt)
     summary = await generate_summary(content)
 
     return {
@@ -355,7 +364,7 @@ Requirements:
 
 After the puzzle, provide the answer in a SEPARATE section marked ANSWER: that will be posted tomorrow."""
 
-    full_response = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
+    full_response = await call_claude(GENERATION_MODEL, 1024, prompt)
 
     # Parse out puzzle and answer
     if "ANSWER:" in full_response:
@@ -546,7 +555,7 @@ Requirements:
 - No preamble
 - Close with one emoji"""
 
-                content = await call_claude("claude-sonnet-4-20250514", 1024, prompt)
+                content = await call_claude(GENERATION_MODEL, 1024, prompt)
                 used_topic = topic
             else:
                 result = await generate_fact(history)

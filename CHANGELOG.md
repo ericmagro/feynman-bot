@@ -5,6 +5,22 @@ All notable changes to Feynman Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-26
+
+### Added
+- **Unit test suite** (`test_bot.py`) with 29 tests covering history management, deduplication, and utilities
+- **Testing guide** in CLAUDE.md with patterns for pure functions, async, file I/O, and error handling
+- **Configurable models** via environment variables: `GENERATION_MODEL` and `SUMMARY_MODEL`
+- **Named constants** for content variety settings: `RECENT_WONDERS_MEMORY`, `RECENT_TOPICS_MEMORY`, `CALLBACK_PROBABILITY`
+- `conftest.py` for pytest environment setup
+- `pyproject.toml` with pytest-asyncio configuration
+- `TODO.md` documenting prioritized future improvements
+- `pytest` and `pytest-asyncio` as dev dependencies
+
+### Changed
+- **Pinned dependency versions** with upper bounds to prevent breaking changes
+- Magic numbers replaced with named constants for maintainability
+
 ## [1.0.0] - 2025-01-25
 
 First stable release after production hardening audit.
